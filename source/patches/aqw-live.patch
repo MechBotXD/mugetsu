@@ -1,3 +1,99 @@
+diff --git a/desktop/src/app.rs b/desktop/src/app.rs
+index a5f7bc2..c8c33f4 100644
+--- a/desktop/src/app.rs
++++ b/desktop/src/app.rs
+@@ -765,6 +765,7 @@ impl MainWindow {
+                 self.gui.window().request_redraw();
+             }
+             Setting::OpenLogFolder => mugetsu::open_log_folder(),
++            Setting::OpenStudio => mugetsu::open_studio(),
+         }
+     }
+ 
+diff --git a/desktop/src/gui/context_menu.rs b/desktop/src/gui/context_menu.rs
+index 5708e9e..b5ff489 100644
+--- a/desktop/src/gui/context_menu.rs
++++ b/desktop/src/gui/context_menu.rs
+@@ -238,6 +238,11 @@ impl ContextMenu {
+                             send(RuffleEvent::MugetsuSetting(Setting::OpenLogFolder));
+                             item_clicked = true;
+                         }
++                        // AQW build (aqw-live): the item editor.
++                        if action_row(ui, z, "Mugetsu Studio", Some("↗")).clicked() {
++                            send(RuffleEvent::MugetsuSetting(Setting::OpenStudio));
++                            item_clicked = true;
++                        }
+                     })
+             });
+ 
+diff --git a/desktop/src/gui/mugetsu_menu.rs b/desktop/src/gui/mugetsu_menu.rs
+index d7f8c64..a5b523b 100644
+--- a/desktop/src/gui/mugetsu_menu.rs
++++ b/desktop/src/gui/mugetsu_menu.rs
+@@ -77,6 +77,11 @@ pub fn contents(ui: &mut Ui, event_loop: &EventLoopProxy<RuffleEvent>) {
+         send(Setting::OpenLogFolder);
+         ui.close();
+     }
++    // AQW build (aqw-live): the item editor.
++    if action_row(ui, z, "Mugetsu Studio", Some("↗")).clicked() {
++        send(Setting::OpenStudio);
++        ui.close();
++    }
+ }
+ 
+ pub fn menu_button(ui: &mut Ui, event_loop: &EventLoopProxy<RuffleEvent>) {
+diff --git a/desktop/src/mugetsu.rs b/desktop/src/mugetsu.rs
+index 0876301..edc840e 100644
+--- a/desktop/src/mugetsu.rs
++++ b/desktop/src/mugetsu.rs
+@@ -273,6 +273,8 @@ pub enum Setting {
+     Graphics(Option<Graphics>),
+     ShowFps(bool),
+     OpenLogFolder,
++    /// AQW build (aqw-live): starts Mugetsu Studio (see `open_studio`).
++    OpenStudio,
+ }
+ 
+ /// The settings as they are now, for the menu.
+@@ -351,6 +353,38 @@ pub fn open_log_folder() {
+     }
+ }
+ 
++/// AQW build (aqw-live): starts Mugetsu Studio, the item editor. The command is in
++/// `mugetsu-studio.txt` next to the program: the program on the first line, then one argument
++/// per line (no quoting needed), e.g. `pythonw` / `-I` / `C:\...\tools\studio.py`.
++pub fn open_studio() {
++    let Some(file) = std::env::current_exe()
++        .ok()
++        .and_then(|exe| exe.parent().map(|dir| dir.join("mugetsu-studio.txt")))
++    else {
++        return;
++    };
++    let Ok(text) = std::fs::read_to_string(&file) else {
++        let _ = rfd::MessageDialog::new()
++            .set_level(rfd::MessageLevel::Info)
++            .set_title("Mugetsu Studio")
++            .set_description(format!(
++                "To open Mugetsu Studio from here, put its command in {}: the program on the \
++                first line, then one argument per line.",
++                file.display()
++            ))
++            .set_buttons(rfd::MessageButtons::Ok)
++            .show();
++        return;
++    };
++    let mut lines = text.lines().map(str::trim).filter(|line| !line.is_empty());
++    let Some(program) = lines.next() else {
++        return;
++    };
++    if let Err(e) = std::process::Command::new(program).args(lines).spawn() {
++        tracing::warn!("Couldn't start Mugetsu Studio ({program}): {e}");
++    }
++}
++
+ /// The file the Vulkan driver crashed in on this PC, if that still applies: the same driver
+ /// file (a driver update installs to a new folder, or at least replaces the file). A stale
+ /// record is deleted. Not retried for a new Mugetsu version: the crashes seen so far (Intel
 diff --git a/frontend-utils/src/backends/navigator.rs b/frontend-utils/src/backends/navigator.rs
 index f97721b..deb15e1 100644
 --- a/frontend-utils/src/backends/navigator.rs
