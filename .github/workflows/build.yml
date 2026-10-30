@@ -30,6 +30,10 @@ on:
         description: 'Add macOS to the existing release (builds only the Mac app)'
         type: boolean
         default: false
+      aqw_live:
+        description: 'Test build with aqw-live (local game file overrides; never released)'
+        type: boolean
+        default: false
 
 # Read-only by default (pull requests run with this); only the release job writes.
 permissions:
@@ -62,6 +66,8 @@ jobs:
 
       - name: Build
         shell: pwsh
+        env:
+          MUGETSU_AQW_LIVE: ${{ inputs.aqw_live && '1' || '' }}
         run: ./source/build-windows.ps1
 
       - name: Package
@@ -89,7 +95,7 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: Mugetsu-${{ steps.package.outputs.version }}
+          name: Mugetsu-${{ steps.package.outputs.version }}${{ inputs.aqw_live && '-aqw-live' || '' }}
           path: package
 
       - uses: actions/upload-artifact@v6
@@ -128,6 +134,8 @@ jobs:
           java-version: '21'
 
       - name: Build
+        env:
+          MUGETSU_AQW_LIVE: ${{ inputs.aqw_live && '1' || '' }}
         run: bash source/build-linux.sh
 
       - name: Package
@@ -186,6 +194,8 @@ jobs:
           java-version: '21'
 
       - name: Build
+        env:
+          MUGETSU_AQW_LIVE: ${{ inputs.aqw_live && '1' || '' }}
         run: bash source/build-macos.sh --universal
 
       - name: Package
@@ -216,7 +226,7 @@ jobs:
   release:
     # Without macOS when it's skipped; `!cancelled()` lets this run after a skipped job.
     if: >-
-      ${{ !cancelled() && inputs.release && !inputs.attach_macos
+      ${{ !cancelled() && inputs.release && !inputs.attach_macos && !inputs.aqw_live
       && needs.windows.result == 'success' && needs.linux.result == 'success'
       && (inputs.skip_macos || needs.macos.result == 'success') }}
     needs: [windows, linux, macos]
@@ -261,7 +271,7 @@ jobs:
           gh release create "v$VERSION" release/* --draft --title "Mugetsu $VERSION" --notes-file notes.md --target "$GITHUB_SHA"
 
   attach-macos:
-    if: ${{ inputs.attach_macos && needs.macos.result == 'success' }}
+    if: ${{ inputs.attach_macos && !inputs.aqw_live && needs.macos.result == 'success' }}
     needs: [macos]
     runs-on: ubuntu-latest
     permissions:

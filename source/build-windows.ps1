@@ -10,6 +10,9 @@
 # Optional, for building without downloads: MUGETSU_RUFFLE_REMOTE (a local clone of Ruffle
 # to fetch the commit from) and MUGETSU_CRATES_DIR (a folder with the unpacked crates, e.g.
 # Cargo's registry/src/index.crates.io-*).
+#
+# MUGETSU_AQW_LIVE=1 also applies patches\aqw-live.patch: game files found in an
+# `aqw-overrides` folder next to Mugetsu.exe replace the server's copies. Off by default.
 param([switch]$NoPgo, [switch]$PrepareOnly)
 
 $ErrorActionPreference = 'Stop'
@@ -37,6 +40,10 @@ Run git @('-C', $ruffle, '-c', 'advice.detachedHead=false', 'checkout', '-q', 'F
 
 # 2. Mugetsu's changes to Ruffle.
 Run git @('-C', $ruffle, 'apply', '--whitespace=nowarn', (Join-Path $root 'patches\ruffle.patch'))
+if ($env:MUGETSU_AQW_LIVE -eq '1') {
+    Write-Host 'Applying aqw-live.patch (local game file overrides)'
+    Run git @('-C', $ruffle, 'apply', '--whitespace=nowarn', (Join-Path $root 'patches\aqw-live.patch'))
+}
 
 # 3. The libraries Mugetsu changes, from crates.io, patched into ruffle\patches\.
 $crates = @(

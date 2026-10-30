@@ -1,0 +1,60 @@
+diff --git a/frontend-utils/src/backends/navigator.rs b/frontend-utils/src/backends/navigator.rs
+index f97721b..deb15e1 100644
+--- a/frontend-utils/src/backends/navigator.rs
++++ b/frontend-utils/src/backends/navigator.rs
+@@ -194,6 +194,21 @@ impl<F: FutureSpawner<Error> + 'static, I: NavigatorInterface> NavigatorBackend
+             }
+         };
+ 
++        // AQW build (aqw-live): a game file found in the `aqw-overrides` folder is used instead
++        // of the server's copy (see `aqw_override`).
++        if request.method() == NavigationMethod::Get
++            && let Some(contents) = aqw_override(&processed_url)
++        {
++            let response: Box<dyn SuccessResponse> = Box::new(Response {
++                url: processed_url.to_string(),
++                response_body: ResponseBody::File(Ok(contents)),
++                text_encoding: None,
++                status: 200,
++                redirected: false,
++            });
++            return async_return(Ok(response));
++        }
++
+         let client = self.client.clone();
+ 
+         match processed_url.scheme() {
+@@ -497,6 +512,33 @@ impl<F: FutureSpawner<Error> + 'static, I: NavigatorInterface> NavigatorBackend
+     }
+ }
+ 
++/// AQW build (aqw-live): the local copy of an AQW game file, if there is one.
++///
++/// `https://game.aq.com/game/gamefiles/items/swords/sword01.swf?ver=1` is looked up as
++/// `aqw-overrides/items/swords/sword01.swf` next to the program (the query is ignored). Without
++/// that folder nothing changes. Only plain path parts are followed, so a URL can't reach a file
++/// outside the folder.
++fn aqw_override(url: &Url) -> Option<Vec<u8>> {
++    let host = url.host_str()?;
++    if host != "aq.com" && !host.ends_with(".aq.com") {
++        return None;
++    }
++    let path = url.path().strip_prefix("/game/gamefiles/")?;
++    let mut file = std::env::current_exe().ok()?.parent()?.join("aqw-overrides");
++    if !file.is_dir() {
++        return None;
++    }
++    for part in path.split('/') {
++        if part.is_empty() || part == "." || part == ".." || part.contains(['\\', ':']) {
++            return None;
++        }
++        file.push(part);
++    }
++    let contents = std::fs::read(&file).ok()?;
++    warn!("aqw-live: using {} instead of {url}", file.display());
++    Some(contents)
++}
++
+ /// Spawns a new asynchronous task in a tokio runtime, without the current executor needing to belong to tokio
+ pub async fn spawn_tokio<F>(future: F) -> F::Output
+ where

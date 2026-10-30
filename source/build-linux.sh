@@ -28,6 +28,9 @@ Environment:
   MUGETSU_CRATES_DIR     directory containing wgpu-core-30.0.1,
                          wgpu-hal-30.0.1, gc-arena-0.7.0,
                          lyon_path-1.0.7 and lyon_algorithms-1.0.5
+  MUGETSU_AQW_LIVE       1: also apply patches/aqw-live.patch (game files
+                         in an aqw-overrides folder next to the program
+                         replace the server's copies)
 USAGE
 }
 while (($#)); do
@@ -59,6 +62,10 @@ run git -C "$ruffle" -c advice.detachedHead=false checkout -q FETCH_HEAD
 
 # 2. Mugetsu's changes to Ruffle.
 run git -C "$ruffle" apply --whitespace=nowarn "$root/patches/ruffle.patch"
+if [[ "${MUGETSU_AQW_LIVE:-}" == 1 ]]; then
+    echo "Applying aqw-live.patch (local game file overrides)"
+    run git -C "$ruffle" apply --whitespace=nowarn "$root/patches/aqw-live.patch"
+fi
 
 # 3. The five libraries Mugetsu changes, from crates.io, patched into ruffle/patches/.
 crates=(
